@@ -1,7 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MyCharacter.h"
-
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values
 AMyCharacter::AMyCharacter()
@@ -39,12 +40,11 @@ void AMyCharacter::BeginPlay()
 		{
 			CVar2->Set(DemoRecordHz);
 		}
-		// ETHAN TEST
-		/*IConsoleVariable* CVar3 = IConsoleManager::Get().FindConsoleVariable(TEXT("p.ReplayUseInterpolation"));
+		IConsoleVariable* CVar3 = IConsoleManager::Get().FindConsoleVariable(TEXT("p.ReplayUseInterpolation"));
 		if (CVar3)
 		{
 			CVar3->Set(false);
-		}*/
+		}
 
 		UGameInstance* const GI = GetGameInstance();
 		if (GI)
@@ -183,3 +183,90 @@ void AMyCharacter::PlayReplay()
 	}
 }
 
+void AMyCharacter::OnRep_ReplayLastTransformUpdateTimeStamp()
+{
+	ReplicatedServerLastTransformUpdateTimeStamp = ReplayLastTransformUpdateTimeStamp;
+}
+
+void AMyCharacter::PreReplicationForReplay(IRepChangedPropertyTracker & ChangedPropertyTracker)
+{
+	// NOTE: purposely not calling Super since that is old behavior and we are using 4.22 stuff here
+
+	// If this is a replay, we save out certain values we need to runtime to do smooth interpolation
+	// We'll be able to look ahead in the replay to have these ahead of time for smoother playback
+	FCharacterReplaySample ReplaySample;
+
+	const UWorld* World = GetWorld();
+	UCharacterMovementComponent* const MyCharacterMovement = GetCharacterMovement();
+
+	// If this is a client-recorded replay, use the mesh location and rotation, since these will always
+	// be smoothed - unlike the actor position and rotation.
+	const USkeletalMeshComponent* const MeshComponent = GetMesh();
+	if (MeshComponent && World && World->IsRecordingClientReplay())
+	{
+		FNetworkPredictionData_Client_Character const* const ClientNetworkPredicationData = MyCharacterMovement->GetPredictionData_Client_Character();
+		if ((Role == ROLE_SimulatedProxy) && ClientNetworkPredicationData)
+		{
+			ReplaySample.Location = GetActorLocation() + ClientNetworkPredicationData->MeshTranslationOffset;
+			if (MyCharacterMovement->NetworkSmoothingMode == ENetworkSmoothingMode::Exponential)
+			{
+				ReplaySample.Rotation = GetActorRotation() + ClientNetworkPredicationData->MeshRotationOffset.Rotator();
+			}
+			else
+			{
+				ReplaySample.Rotation = ClientNetworkPredicationData->MeshRotationOffset.Rotator();
+			}
+		}
+		else
+		{
+			// Remove the base transform from the mesh's transform, since on playback the base transform
+			// will be stored in the mesh's RelativeLocation and RelativeRotation.
+			const FTransform BaseTransform(GetBaseRotationOffset(), GetBaseTranslationOffset());
+			const FTransform MeshRootTransform = BaseTransform.Inverse() * MeshComponent->GetComponentTransform();
+
+			ReplaySample.Location = MeshRootTransform.GetLocation();
+			ReplaySample.Rotation = MeshRootTransform.GetRotation().Rotator();
+		}
+
+		// On client replays, our view pitch will be set to 0 as by default we do not replicate
+		// pitch for owners, just for simulated. So instead push our rotation into the sampler
+		if (Controller != nullptr && Role == ROLE_AutonomousProxy && GetNetMode() == NM_Client)
+		{
+			SetRemoteViewPitch(Controller->GetControlRotation().Pitch);
+		}
+	}
+	else
+	{
+		ReplaySample.Location = GetActorLocation();
+		ReplaySample.Rotation = GetActorRotation();
+	}
+
+	ReplaySample.Velocity = GetVelocity();
+	ReplaySample.Acceleration = MyCharacterMovement->GetCurrentAcceleration();
+	ReplaySample.RemoteViewPitch = RemoteViewPitch;
+
+	if (World)
+	{
+		if (World->DemoNetDriver)
+		{
+			ReplaySample.Time = World->DemoNetDriver->DemoCurrentTime;
+		}
+
+		ReplayLastTransformUpdateTimeStamp = World->GetTimeSeconds();
+	}
+
+	FBitWriter Writer(0, true);
+	Writer << ReplaySample;
+
+	ChangedPropertyTracker.SetExternalData(Writer.GetData(), Writer.GetNumBits());
+}
+
+void AMyCharacter::GetLifetimeReplicatedProps(TArray< FLifetimeProperty > & OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(AMyCharacter, ReplayLastTransformUpdateTimeStamp, COND_ReplayOnly);
+
+	// This is needed to override the condition in Character (can be removed in 4.22)
+	DOREPLIFETIME_CHANGE_CONDITION(AActor, ReplicatedMovement, COND_SimulatedOrPhysics);
+}
