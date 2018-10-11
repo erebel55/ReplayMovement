@@ -66,9 +66,9 @@ void AMyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (GetWorld() && GetWorld()->DemoNetDriver)
+	if (GetWorld() && GetWorld()->DemoNetDriver && GetWorld()->IsPlayingReplay())
 	{
-		GEngine->AddOnScreenDebugMessage(-1, .1f, FColor::Red, FString::Printf(TEXT("Demo Time: %f"), GetWorld()->DemoNetDriver->DemoTotalTime - GetWorld()->DemoNetDriver->DemoCurrentTime));
+		GEngine->AddOnScreenDebugMessage(-1, .1f, FColor::Red, FString::Printf(TEXT("Replay Time: %f"), GetWorld()->DemoNetDriver->DemoTotalTime - GetWorld()->DemoNetDriver->DemoCurrentTime));
 	}
 
 }
@@ -83,8 +83,8 @@ void AMyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAxis("MoveRight", this, &AMyCharacter::MoveRight);
 	PlayerInputComponent->BindAction("PlayReplay", IE_Pressed, this, &AMyCharacter::PlayReplay);
 
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
+	//PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+	//PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 }
 
 void AMyCharacter::MoveForward(float Value)
