@@ -191,6 +191,11 @@ void AMyCharacter::OnRep_ReplayLastTransformUpdateTimeStamp()
 void AMyCharacter::PreReplicationForReplay(IRepChangedPropertyTracker & ChangedPropertyTracker)
 {
 	// NOTE: purposely not calling Super since that is old behavior and we are using 4.22 stuff here
+	
+	if (bReplicateMovement || (RootComponent && RootComponent->GetAttachParent()))
+	{
+		GatherCurrentMovement();
+	}
 
 	// If this is a replay, we save out certain values we need to runtime to do smooth interpolation
 	// We'll be able to look ahead in the replay to have these ahead of time for smoother playback
