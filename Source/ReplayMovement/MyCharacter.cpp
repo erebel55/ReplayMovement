@@ -1,14 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MyCharacter.h"
-
+#include "Engine/DemoNetDriver.h"
 
 // Sets default values
 AMyCharacter::AMyCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
 }
 
 // Called when the game starts or when spawned
@@ -39,12 +38,6 @@ void AMyCharacter::BeginPlay()
 		{
 			CVar2->Set(DemoRecordHz);
 		}
-		// ETHAN TEST
-		/*IConsoleVariable* CVar3 = IConsoleManager::Get().FindConsoleVariable(TEXT("p.ReplayUseInterpolation"));
-		if (CVar3)
-		{
-			CVar3->Set(false);
-		}*/
 
 		UGameInstance* const GI = GetGameInstance();
 		if (GI)
@@ -82,9 +75,6 @@ void AMyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAxis("MoveForward", this, &AMyCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AMyCharacter::MoveRight);
 	PlayerInputComponent->BindAction("PlayReplay", IE_Pressed, this, &AMyCharacter::PlayReplay);
-
-	//PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
-	//PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 }
 
 void AMyCharacter::MoveForward(float Value)
@@ -177,9 +167,7 @@ void AMyCharacter::PlayReplay()
 
 			GI->PlayReplay(TEXT("_KillCam"), nullptr, ReplayOptions);
 
-			TheWorld->DemoNetDriver->bIsLocalReplay = true;
 			TheWorld->DemoNetDriver->GotoTimeInSeconds(1.f);
 		}
 	}
 }
-
